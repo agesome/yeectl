@@ -1,19 +1,51 @@
 #include <QtNetwork>
 #include <QString>
 #include <QtGui/QGuiApplication>
+#include <QMap>
+#include <QRegularExpression>
 
 #include <exception>
+#include <functional>
 
 class Device
 {
 public:
     Device(QStringView discoveryMessage)
     {
-        const auto l = discoveryMessage.split(QString("\r\n"));
-        qDebug() << l;
+        const auto l = discoveryMessage.split(L"\r\n");
+        for (auto s : l)
+        {
+            if (auto match = kDiscoveryRegex.match(s); match.hasMatch())
+            {
+                if (auto field = match.captured(kDiscoveryField); kHandlers.contains(field))
+                {
+                    kHandlers[field](match.captured(kDiscoveryContent));
+                }
+            }
+        }
+
     }
+
 private:
     QTcpSocket m_socket;
+
+    const QMap<QStringView, std::function<void (QStringView)>> kHandlers = {
+        { L"power", [this](QStringView s) {
+            qDebug() << "power handler" << s;
+            m_isOn = s.startsWith(L"on");
+        }},
+        { L"bright", [this](QStringView s) {
+            m_brightness = s.toShort();
+            qDebug() << "bright handler" << s << m_brightness;
+        }},
+    };
+
+    static inline const QRegularExpression kDiscoveryRegex{"^(\\w+): (\\S*)"};
+    static constexpr auto kDiscoveryField = 1;
+    static constexpr auto kDiscoveryContent = 2;
+
+    bool m_isOn;
+    uint8_t m_brightness;
 };
 
 class DeviceList : public QObject
@@ -21,7 +53,7 @@ class DeviceList : public QObject
 public:
     DeviceList()
     {
-        QObject::connect(&m_socket, &QUdpSocket::readyRead, this, &DeviceList::onDatagram);
+        connect(&m_socket, &QUdpSocket::readyRead, this, &DeviceList::onDatagram);
 
         const QString msg = "M-SEARCH * HTTP/1.1\r\n"
                             "ST: wifi_bulb\r\n"
@@ -36,7 +68,6 @@ public:
             {
                 qWarning() << "discovery message is" << msg.size() << "bytes, but" << sz << "were sent";
             }
-
         }
         else
         {
@@ -51,7 +82,6 @@ private:
         {
             // steal only the data
             const QString str {std::move(m_socket.receiveDatagram().data())};
-
             if (str.startsWith("HTTP/1.1 200 OK"))
             {
                 std::unique_ptr<Device> d;
@@ -59,9 +89,9 @@ private:
                 {
                     d = std::make_unique<Device>(str);
                 }
-                catch (...)
+                catch (const std::exception & ex)
                 {
-
+                    qWarning() << ex.what();
                 }
             }
         }
