@@ -8,7 +8,11 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt6 COMPONENTS Network Gui Qml REQUIRED)
 
 set(SOURCE_FILES
-    src/yeectl.cpp)
+    src/yeectl.cpp
+    src/yeectl.hpp)
 
-add_executable(yeectl ${SOURCE_FILES})
+qt_add_resources(resources src/resources.qrc)
+qt_wrap_cpp(moc src/yeectl.hpp)
+
+add_executable(yeectl ${SOURCE_FILES} ${resources} ${moc})
 target_link_libraries(yeectl Qt::Network Qt::Qml Qt::Gui)
