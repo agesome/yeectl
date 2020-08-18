@@ -1,24 +1,51 @@
 import Qt.labs.platform 1.1
+import QtQuick.Window 2.2
+import QtQuick.Controls 2.15 as C
 
-//import yeectl.Device 1.0
 import yeectl 1.0
 
-SystemTrayIcon {
-    visible: true
-    icon.source: "qrc:/lamp.ico"
+Window {
+    id: window
+    flags: Qt.Popup
 
-    menu: Menu {
-        DeviceList {
-            id: deviceList
-        }
-        MenuItem {
-            text: qsTr("Quit")
-            onTriggered: Qt.quit()
-        }
-        MenuItem {
-            text: qsTr("Toggle")
-            onTriggered: deviceList.currentDevice.toggle()
-        }
+    x: tray.geometry.x
+    y: tray.geometry.y - height
+    width: slider.width
+    height: slider.height
+
+    onActiveChanged: window.visible = active
+
+    DeviceList {
+        id: deviceList
     }
-    onActivated: console.log("hello")
+
+    C.Slider {
+        id: slider
+        from: 1
+        value: 25
+        to: 100
+    }
+
+    SystemTrayIcon {
+        id: tray
+        visible: true
+        icon.source: "qrc:/icons/lamp.svg"
+
+        menu: Menu {
+            MenuItem {
+                text: qsTr("Toggle")
+                onTriggered: deviceList.currentDevice.toggle()
+            }
+            MenuItem {
+                text: qsTr("Quit")
+                onTriggered: Qt.quit()
+            }
+        }
+
+        onActivated: if (reason === SystemTrayIcon.Trigger) {
+                         window.show()
+                     }
+    }
+
 }
+
