@@ -17,6 +17,7 @@ multicast_worker::multicast_worker(asio::io_context &context, device_manager &ma
         _socket.set_option(asio::ip::multicast::join_group(kMulticastAddress));
         _socket.set_option(asio::ip::udp::socket::reuse_address(true));
         _socket.set_option(asio::socket_base::broadcast(true));
+        _socket.set_option(asio::ip::multicast::enable_loopback(false));
         _socket.bind(listen_endpoint);
     }
     catch (std::exception & ex)

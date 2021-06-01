@@ -111,7 +111,7 @@ asio::ip::tcp::endpoint device::find_endpoint(std::string_view view)
 
 void device::listen_on_socket()
 {
-    static std::array<char, 1024>   _buffer;
+    static std::array<char, 1024> _buffer;
 
     _socket.async_receive(asio::buffer(_buffer), [this](std::error_code error, std::size_t length)
     {
@@ -123,6 +123,7 @@ void device::listen_on_socket()
 
         std::string_view view(_buffer.data(), length);
         spdlog::info("from lamp: {}\n{}", length, view);
+        _buffer.fill(0);
 
         listen_on_socket();
     });

@@ -1,34 +1,66 @@
 import Qt.labs.platform
 import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Layouts
 
 import yeectl
 
 Window {
     id: window
-//    flags: Qt.Popup
+    flags: Qt.Popup
 
-//    x: tray.geometry.x
-//    y: tray.geometry.y - height
-    width: 100//slider.width
-    height: 100//slider.height
-    visible: true
+    height: frame.height
+    width: frame.width
 
-//    onActiveChanged: window.visible = active
+    y: Screen.desktopAvailableHeight - height
+    x: Screen.desktopAvailableWidth - width
+//    y: tray.geometry.y // - tray.geometry.height - height
+//    x: tray.geometry.x //- tray.geometry.width - width
 
-//    DeviceList {
-//        id: deviceList
+//    onXChanged: {
+//        console.log('pos: ', x, y)
 //    }
 
-    Slider {
-        id: slider
-        from: 1
-        value: 0
-        stepSize: 1
-        width: 100
-        height: 100
-        to: 100
-        onValueChanged: DeviceManager.set_brightness(value)
+//    Component.onCompleted: {
+//        console.log(x, y)
+//    }
+
+    onActiveChanged: window.visible = active
+
+    Frame {
+        id: frame
+        background: Rectangle {
+            border.color: "black"
+        }
+
+        RowLayout {
+            height: slider.height
+
+            Switch {
+            }
+
+            ToolSeparator {}
+
+            Label {
+                Layout.maximumHeight: parent.height
+                Layout.maximumWidth: 0.3 * slider.width//textMetrics.width
+                fontSizeMode: Text.Fit
+                font.pointSize: 100
+                horizontalAlignment: Text.AlignRight
+                text: slider.value
+            }
+
+            Slider {
+                id: slider
+                value: 0
+                from: 0
+                to: 100
+                stepSize: 5
+                snapMode: Slider.SnapAlways
+                wheelEnabled: true
+                onValueChanged: DeviceManager.set_brightness(value)
+            }
+        }
     }
 
     SystemTrayIcon {
@@ -37,10 +69,10 @@ Window {
         icon.source: "qrc:/icons/lamp.svg"
 
         menu: Menu {
-//            MenuItem {
-//                text: qsTr("Toggle")
-//                onTriggered: deviceList.currentDevice.toggle()
-//            }
+            //            MenuItem {
+            //                text: qsTr("Toggle")
+            //                onTriggered: deviceList.currentDevice.toggle()
+            //            }
             MenuItem {
                 text: qsTr("Quit")
                 onTriggered: Qt.quit()
@@ -48,10 +80,13 @@ Window {
         }
 
         onActivated: (reason) => {
-                         console.log("activated", reason)
-//                         if (reason === SystemTrayIcon.Trigger) {
+                         if (reason === SystemTrayIcon.Trigger) {
+//                             window.y = tray.geometry.y - window.height - tray.geometry.height - 150
+//                             window.x = tray.geometry.x - window.width - tray.geometry.width - 150
+//                             console.log(tray.geometry)
+//                             console.log(window.x, window.y)
                              window.show()
-//                         }
+                         }
                      }
     }
 

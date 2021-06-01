@@ -1,5 +1,6 @@
 #include <QQmlApplicationEngine>
 #include <QtGui/QGuiApplication>
+#include <QtQuickControls2/QQuickStyle>
 
 #include <thread>
 
@@ -23,6 +24,7 @@ int main(int argc, char **argv)
 
     qDebug() << qmlRegisterSingletonInstance("yeectl", 1, 0, "DeviceManager", &wrapper);
 
+    QQuickStyle::setStyle("Material");
     QGuiApplication app(argc, argv);
     QQmlApplicationEngine engine("qrc:/src/main.qml");
 
