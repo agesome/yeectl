@@ -20,14 +20,23 @@ set(HEADER_FILES
     src/util.hpp
     src/multicast_worker.hpp
     src/device_manager.hpp
-    src/device_manager_wrapper.hpp
     src/device.hpp
 )
 
-qt_add_resources(RESOURCES resources.qrc)
-qt_wrap_cpp(MOC_FILES ${HEADER_FILES})
+set(QT_HEADER_FILES
+    src/device_manager_wrapper.hpp
+)
 
-add_executable(yeectl ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES})
+qt_add_resources(RESOURCES resources.qrc)
+qt_wrap_cpp(MOC_FILES ${QT_HEADER_FILES})
+
+add_executable(yeectl ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
 target_include_directories(yeectl PRIVATE src)
 target_link_libraries(yeectl Qt::Network Qt::Qml Qt::Gui Qt::QuickControls2)
 target_link_libraries(yeectl ws2_32 CONAN_PKG::asio CONAN_PKG::spdlog CONAN_PKG::nlohmann_json)
+
+if (MSVC)
+    target_link_libraries(yeectl ws2_32)
+    target_compile_options(yeectl PRIVATE /W4)
+    target_compile_definitions(yeectl PRIVATE _WIN32_WINNT=_WIN32_WINNT_WIN7 _WINSOCK_DEPRECATED_NO_WARNINGS)
+endif()

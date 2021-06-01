@@ -9,6 +9,8 @@
 #include <device_manager.hpp>
 #include <device_manager_wrapper.hpp>
 
+#include "spdlog/spdlog.h"
+
 int main(int argc, char **argv)
 {
     asio::io_context io_context;
@@ -17,18 +19,26 @@ int main(int argc, char **argv)
     device_manager_wrapper wrapper(manager);
     multicast_worker worker(io_context, manager);
 
-    std::thread io_thread([&]()
+    if (qmlRegisterSingletonInstance("yeectl", 1, 0, "DeviceManager", &wrapper) < 0)
     {
-        io_context.run();
-    });
-
-    qDebug() << qmlRegisterSingletonInstance("yeectl", 1, 0, "DeviceManager", &wrapper);
+        spdlog::critical("failed to register QML type");
+        return EXIT_FAILURE;
+    }
 
     QQuickStyle::setStyle("Material");
     QGuiApplication app(argc, argv);
     QQmlApplicationEngine engine("qrc:/src/main.qml");
 
+    std::thread io_thread([&]() { io_context.run(); });
+
     app.exec();
+
+    spdlog::info("Qt has shut down, shutting down asio");
+
     io_context.stop();
-    return 0;
+    io_thread.join();
+
+    spdlog::info("asio has shut down, exiting");
+
+    return EXIT_SUCCESS;
 }
