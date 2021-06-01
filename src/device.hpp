@@ -1,80 +1,28 @@
-#ifndef DEVICE_HPP
-#define DEVICE_HPP
+#ifndef YEECTL_DEVICE_HPP
+#define YEECTL_DEVICE_HPP
 
-#include <QtNetwork>
-#include <QString>
-#include <QRegularExpression>
+#include <unordered_map>
+#include <asio.hpp>
+#include <variant>
 
-#include <exception>
-#include <functional>
-#include <map>
-
-class Device : public QObject
+class device
 {
-    Q_OBJECT
 public:
-    Device(QStringView discoveryMessage);
-    Device();
+    using property_map = std::unordered_map<std::string_view, std::variant<std::string_view, int>>;
 
-    uint32_t id() const
-    {
-        return m_id;
-    }
+    device(asio::io_context & context, std::string_view data, property_map properties);
 
-    void open();
+    std::string_view id();
+    void set_brigtness(int v);
 
-public slots:
-    void toggle();
-
+    static property_map parse_multicast(std::string_view view);
 private:
-    void parseDiscoveryMessage(QStringView discoveryMessage);
+    static asio::ip::tcp::endpoint find_endpoint(std::string_view view);
+    void listen_on_socket();
 
-    void onSocketData();
-
-    void onSocketError(QAbstractSocket::SocketError socketError);
-
-    void onSocketStateChange(QAbstractSocket::SocketState socketState);
-
-    QTcpSocket m_socket;
-
-    const QMap<QStringView, std::function<void (QStringView)>> kHandlers = {
-        { L"power", [this](QStringView s) {
-            qDebug() << "power handler" << s;
-            m_isOn = s.startsWith(L"on");
-        }},
-        { L"bright", [this](QStringView s) {
-            m_brightness = s.toShort();
-            qDebug() << "bright handler" << s << m_brightness;
-        }},
-        { L"id", [this](QStringView s) {
-            bool ok = false;
-            m_id = s.toULongLong(&ok, 16);
-            qDebug() << "id:" << s << ok << m_id;
-        }},
-        { L"Location", [this](QStringView s) {
-            QRegularExpression regex {"yeelight:\\/\\/(.+):(.+)"};
-            constexpr auto kLocationIp = 1;
-            constexpr auto kLocationPort = 2;
-
-            if (auto match = regex.match(s); match.hasMatch() && match.lastCapturedIndex() >= kLocationPort)
-            {
-                qDebug() << "location handler" << match.captured(kLocationIp) << match.captured(kLocationPort);
-                m_address = QHostAddress(match.captured(kLocationIp));
-                m_port = match.captured(kLocationPort).toUInt();
-            }
-        }},
-    };
-
-    static inline const QRegularExpression kDiscoveryRegex {"^(\\w+): (\\S*)"};
-    static constexpr auto kDiscoveryField = 1;
-    static constexpr auto kDiscoveryContent = 2;
-
-    bool m_isOn;
-    uint8_t m_brightness;
-    uint32_t m_id;
-
-    QHostAddress m_address;
-    quint16 m_port;
+    asio::ip::tcp::socket   _socket;
+    property_map            _properties;
+    std::string             _raw_data;
 };
 
-#endif
+#endif // YEECTL_DEVICE_HPP

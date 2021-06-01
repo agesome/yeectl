@@ -1,29 +1,34 @@
-import Qt.labs.platform 1.1
-import QtQuick.Window 2.2
-import QtQuick.Controls 2.15 as C
+import Qt.labs.platform
+import QtQuick.Window
+import QtQuick.Controls
 
-import yeectl 1.0
+import yeectl
 
 Window {
     id: window
-    flags: Qt.Popup
+//    flags: Qt.Popup
 
-    x: tray.geometry.x
-    y: tray.geometry.y - height
-    width: slider.width
-    height: slider.height
+//    x: tray.geometry.x
+//    y: tray.geometry.y - height
+    width: 100//slider.width
+    height: 100//slider.height
+    visible: true
 
-    onActiveChanged: window.visible = active
+//    onActiveChanged: window.visible = active
 
-    DeviceList {
-        id: deviceList
-    }
+//    DeviceList {
+//        id: deviceList
+//    }
 
-    C.Slider {
+    Slider {
         id: slider
         from: 1
-        value: 25
+        value: 0
+        stepSize: 1
+        width: 100
+        height: 100
         to: 100
+        onValueChanged: DeviceManager.set_brightness(value)
     }
 
     SystemTrayIcon {
@@ -32,18 +37,21 @@ Window {
         icon.source: "qrc:/icons/lamp.svg"
 
         menu: Menu {
-            MenuItem {
-                text: qsTr("Toggle")
-                onTriggered: deviceList.currentDevice.toggle()
-            }
+//            MenuItem {
+//                text: qsTr("Toggle")
+//                onTriggered: deviceList.currentDevice.toggle()
+//            }
             MenuItem {
                 text: qsTr("Quit")
                 onTriggered: Qt.quit()
             }
         }
 
-        onActivated: if (reason === SystemTrayIcon.Trigger) {
-                         window.show()
+        onActivated: (reason) => {
+                         console.log("activated", reason)
+//                         if (reason === SystemTrayIcon.Trigger) {
+                             window.show()
+//                         }
                      }
     }
 
