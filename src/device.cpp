@@ -48,9 +48,15 @@ void device::set_property(const std::string &name, const property &value)
 
     _socket.async_send(asio::buffer(str), [=](std::error_code error, std::size_t length)
     {
-        if (error || length != str.length())
+        if (error && !try_reconnect(error))
         {
-            spdlog::warn("set_property: sent {} vs {}, error: {}", length, str.length(), error.message());
+            spdlog::warn("receive error: {}", error.message());
+            return;
+        }
+
+        if (length != str.length())
+        {
+            spdlog::warn("set_property: sent {} vs {}", length, str.length());
             _requests.erase(result.first);
         }
     });
@@ -120,14 +126,25 @@ void device::listen()
 {
     _socket.async_receive(asio::buffer(_buffer), [this](std::error_code error, std::size_t length)
     {
-        if (error)
+        if (error && !try_reconnect(error))
         {
             spdlog::warn("receive error: {}", error.message());
             return;
         }
 
         std::string_view view(_buffer.data(), length);
-        const auto json = nlohmann::json::parse(view);
+        nlohmann::json json;
+        try
+        {
+            json = nlohmann::json::parse(view);
+        }
+        catch (const std::exception & ex)
+        {
+            spdlog::warn("json::parse failed: {}", ex.what());
+            spdlog::warn("message was: {}", view);
+            listen();
+        }
+
         if (json.contains("id"))
         {
             const auto id = json.at("id").get<size_t>();
@@ -167,4 +184,19 @@ void device::connect()
     auto endpoint = find_endpoint(std::get<std::string>(_properties["Location"]));
     _socket.connect(endpoint);
     spdlog::info("device at {} connected", endpoint.address().to_string());
+}
+
+bool device::try_reconnect(std::error_code error)
+{
+    const bool is_reconnectible = (asio::error::eof == error) || (asio::error::connection_reset == error);
+    if (is_reconnectible)
+    {
+        spdlog::info("try to reconnect: {}", error.message());
+        _socket.close();
+        _request_counter = 0;
+        _requests.clear();
+        connect();
+        listen();
+    }
+    return is_reconnectible;
 }

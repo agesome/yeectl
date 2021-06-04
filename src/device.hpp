@@ -27,6 +27,7 @@ private:
     static asio::ip::tcp::endpoint find_endpoint(const std::string &view);
     void listen();
     void connect();
+    bool try_reconnect(std::error_code error);
 
     asio::ip::tcp::socket   _socket;
     property_map            _properties;
