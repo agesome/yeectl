@@ -5,47 +5,53 @@
 #include <nlohmann/json.hpp>
 #include <charconv>
 
-device::device(asio::io_context &context, std::string_view data, property_map properties)
+device::device(asio::io_context &context, property_map properties)
     : _socket(context)
+    , _properties(std::move(properties))
+    , _request_counter(0)
 {
-    auto endpoint = find_endpoint(std::get<std::string_view>(properties["Location"]));
-    _socket.connect(endpoint);
-
-    _raw_data = std::move(data);
-    _properties = std::move(properties);
-
-    spdlog::info("device {} connected!", id());
-
-    listen_on_socket();
+    connect();
+    listen();
 }
 
-std::string_view device::id()
+const std::string &device::id() const
 {
-    return std::get<std::string_view>(_properties["id"]);
+    return std::get<std::string>(_properties.at("id"));
 }
 
-void device::set_brigtness(int v)
+const device::property & device::get_property(const std::string & name)
 {
-    static std::string msg;
+    return _properties[name];
+}
 
-    msg = { nlohmann::json
+void device::set_property(const std::string &name, const property &value)
+{
+    auto json = nlohmann::json
     {
-        { "id", 0 },
-        { "method", "set_bright" },
-        { "params", { v, "smooth", 500 } }
-    }.dump() + "\r\n"};
+        { "id", _request_counter },
+        { "method", fmt::format("set_{}", name) },
+    };
 
-    spdlog::info("set_brigtness {} -> {}", v, msg);
-
-    _socket.async_send(asio::buffer(msg), [this](std::error_code error, std::size_t length)
+    if (std::holds_alternative<std::string>(value))
     {
-        if (error || length != msg.length())
+        json["params"] = { std::get<std::string>(value) };
+    }
+    else
+    {
+        json["params"] = { std::get<int>(value) };
+    }
+
+    const auto result = _requests.emplace(_request_counter++, std::string({ json.dump() + "\r\n" }));
+    const auto & str = result.first->second;
+
+    spdlog::info("set {} -> {}", name, str);
+
+    _socket.async_send(asio::buffer(str), [=](std::error_code error, std::size_t length)
+    {
+        if (error || length != str.length())
         {
-            spdlog::warn("set_brigtness: sent {} vs {}, error: {}", length, msg.length(), error.message());
-        }
-        else
-        {
-            spdlog::info("set_brigtness sent");
+            spdlog::warn("set_property: sent {} vs {}, error: {}", length, str.length(), error.message());
+            _requests.erase(result.first);
         }
     });
 }
@@ -65,27 +71,28 @@ device::property_map device::parse_multicast(std::string_view view)
 
         auto [key, value] = maybe_kv.value();
 
-                int iv{};
-        if (auto [_, error] = std::from_chars(value.data(), &value.data()[value.size()], iv);
+        int intvalue{};
+        property prop;
+        if (auto [_, error] = std::from_chars(value.data(), &value.data()[value.size()], intvalue);
                 error == std::errc::invalid_argument || key == "id")
         {
-            properties[key] = value;
-//            spdlog::info("{} = {} (str)", key, value);
+            prop = std::string(value);
         }
         else
         {
-            properties[key] = iv;
-//            spdlog::info("{} = {} (int)", key, iv);
+            prop = intvalue;
         }
+
+        properties.emplace(std::string(key), std::move(prop));
     }
 
     return properties;
 }
 
-asio::ip::tcp::endpoint device::find_endpoint(std::string_view view)
+asio::ip::tcp::endpoint device::find_endpoint(const std::string & view)
 {
     auto line_start = view.find("yeelight://");
-    if (line_start == std::string_view::npos)
+    if (line_start == std::string::npos)
     {
         throw std::exception("no yeelight:// in data");
     }
@@ -97,7 +104,7 @@ asio::ip::tcp::endpoint device::find_endpoint(std::string_view view)
 
     auto port_str = pair.substr(colon + 1);
     auto ip_str = pair.substr(0, colon);
-    spdlog::info("found endpoint: ip:port -> {} : {}", ip_str, port_str);
+    spdlog::info("found endpoint: {}:{}", ip_str, port_str);
 
     unsigned short port{};
     if (auto [_, error] = std::from_chars(port_str.data(), &port_str.data()[port_str.size()], port);
@@ -109,10 +116,8 @@ asio::ip::tcp::endpoint device::find_endpoint(std::string_view view)
     return { asio::ip::make_address_v4(ip_str), port };
 }
 
-void device::listen_on_socket()
+void device::listen()
 {
-    static std::array<char, 1024> _buffer;
-
     _socket.async_receive(asio::buffer(_buffer), [this](std::error_code error, std::size_t length)
     {
         if (error)
@@ -122,10 +127,44 @@ void device::listen_on_socket()
         }
 
         std::string_view view(_buffer.data(), length);
-        spdlog::info("from lamp: {}\n{}", length, view);
-        _buffer.fill(0);
+        const auto json = nlohmann::json::parse(view);
+        if (json.contains("id"))
+        {
+            const auto id = json.at("id").get<size_t>();
+            _requests.erase(id);
+            spdlog::info("request {} completed: {}", id, json["result"].front());
+        }
+        else if (json["method"] == "props")
+        {
+           for (auto & el : json["params"].items())
+           {
+               property update;
+               if (el.value().is_number())
+               {
+                   update = el.value().get<int>();
+               }
+               else
+               {
+                   update = el.value().get<std::string>();
+               }
 
-        listen_on_socket();
+               spdlog::info("property update: {} = {}", el.key(), el.value().dump());
+               const auto v = _properties.insert_or_assign(el.key(), update);
+
+               if (on_property_change)
+               {
+                   on_property_change(id(), v.first->first);
+               }
+           }
+        }
+
+        listen();
     });
 }
 
+void device::connect()
+{
+    auto endpoint = find_endpoint(std::get<std::string>(_properties["Location"]));
+    _socket.connect(endpoint);
+    spdlog::info("device at {} connected", endpoint.address().to_string());
+}

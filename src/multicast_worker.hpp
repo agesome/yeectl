@@ -26,6 +26,7 @@ private:
     asio::ip::udp::socket           _socket;
     asio::steady_timer              _timer;
     std::array<char, kBufferSize>   _buffer;
+    asio::ip::udp::resolver         _resolver;
 
     device_manager & _device_manager;
 };

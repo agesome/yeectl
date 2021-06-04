@@ -7,26 +7,36 @@ const asio::ip::address_v4 multicast_worker::kMulticastAddress = asio::ip::make_
 multicast_worker::multicast_worker(asio::io_context &context, device_manager &manager)
     : _socket(context)
     , _timer(context)
+    , _resolver(context)
     , _device_manager(manager)
 {
     spdlog::info("starting on {}:{}", kMulticastAddress.to_string(), kMulticastPort);
-    asio::ip::udp::endpoint listen_endpoint (asio::ip::address_v4(), kMulticastPort);
     try
     {
-        _socket.open(listen_endpoint.protocol());
+        _socket.open(asio::ip::udp::v4());
         _socket.set_option(asio::ip::multicast::join_group(kMulticastAddress));
         _socket.set_option(asio::ip::udp::socket::reuse_address(true));
         _socket.set_option(asio::socket_base::broadcast(true));
         _socket.set_option(asio::ip::multicast::enable_loopback(false));
-        _socket.bind(listen_endpoint);
+
+        _resolver.async_resolve(asio::ip::udp::v4(), asio::ip::host_name(), std::string(),
+                               [&](std::error_code error, auto result)
+        {
+            if (error)
+            {
+                throw std::exception(fmt::format("failed to resolve local hostname: {}", error.message()).c_str());
+            }
+
+            spdlog::info("resolved local ip: {} -> {}", asio::ip::host_name(), result->endpoint().address().to_string());
+            _socket.bind(result->endpoint());
+            do_receive(context);
+            do_send();
+        });
     }
     catch (std::exception & ex)
     {
         spdlog::critical("{}", ex.what());
     }
-
-    do_receive(context);
-    do_send();
 }
 
 void multicast_worker::do_receive(asio::io_context &context)
@@ -39,13 +49,11 @@ void multicast_worker::do_receive(asio::io_context &context)
             return;
         }
 
-        std::string_view view(_buffer.data(), length);
-//        spdlog::info("len: {}\n{}", length, view);
-
-        auto properties = device::parse_multicast(view);
-        if (properties.contains("Location") && !_device_manager.is_known(std::get<std::string_view>(properties["id"])))
+        const std::string_view view(_buffer.data(), length);
+        const auto properties = device::parse_multicast(view);
+        if (properties.contains("Location") && !_device_manager.is_known(std::get<std::string>(properties.at("id"))))
         {
-            _device_manager.add(std::make_unique<device>(context, view, properties));
+            _device_manager.add(std::make_unique<device>(context, properties));
         }
 
         do_receive(context);
@@ -58,7 +66,7 @@ void multicast_worker::do_send()
                 "M-SEARCH * HTTP/1.1\r\n"
                 "HOST: {}:{}\r\n"
                 "MAN: \"ssdp:discover\"\r\n"
-                "ST: wifi_bulb\r\n",
+                "ST: wifi_bulb",
                 kMulticastAddress.to_string(), kMulticastPort);
 
     static const asio::ip::udp::endpoint send_endpoint(kMulticastAddress, kMulticastPort);
@@ -72,7 +80,7 @@ void multicast_worker::do_send()
         }
         else
         {
-            spdlog::info("multicast sent");
+            spdlog::debug("multicast sent");
         }
 
         _timer.expires_after(kMulticastInterval);

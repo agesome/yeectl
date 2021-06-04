@@ -29,16 +29,22 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
     QQmlApplicationEngine engine("qrc:/src/main.qml");
 
-    std::thread io_thread([&]() { io_context.run(); });
+    std::thread io_thread([&]()
+    {
+        try
+        {
+            io_context.run();
+        }
+        catch (std::exception & ex)
+        {
+            spdlog::critical("io thread exception: {}", ex.what());
+            app.quit();
+        }
+    });
 
     app.exec();
-
-    spdlog::info("Qt has shut down, shutting down asio");
-
     io_context.stop();
     io_thread.join();
-
-    spdlog::info("asio has shut down, exiting");
 
     return EXIT_SUCCESS;
 }

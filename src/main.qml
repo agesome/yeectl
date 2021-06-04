@@ -52,13 +52,13 @@ Window {
 
             Slider {
                 id: slider
-                value: 0
+                value: DeviceManager.brightness
                 from: 0
                 to: 100
                 stepSize: 5
                 snapMode: Slider.SnapAlways
                 wheelEnabled: true
-                onValueChanged: DeviceManager.set_brightness(value)
+                onValueChanged: DeviceManager.brightness = value
             }
         }
     }

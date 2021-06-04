@@ -5,11 +5,12 @@
 
 #include <unordered_map>
 #include <string_view>
+#include <optional>
 
 class device_manager
 {
 public:
-    bool is_known(std::string_view id)
+    bool is_known(const std::string & id) const
     {
         return _devices.contains(id);
     }
@@ -20,15 +21,16 @@ public:
         _devices.emplace(d->id(), std::move(d));
     }
 
-    void set_brightness(int v)
+    void apply_to_current(std::function<void (device &)> f)
     {
         if (!_devices.empty())
         {
-            _devices.begin()->second->set_brigtness(v);
+            f(*_devices.begin()->second);
         }
     }
+
 private:
-    std::unordered_map<std::string_view, std::unique_ptr<device>> _devices;
+    std::unordered_map<std::string, std::unique_ptr<device>> _devices;
 };
 
 #endif // YEECTL_DEVICE_MANAGER_HPP
