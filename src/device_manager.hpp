@@ -10,6 +10,8 @@
 class device_manager
 {
 public:
+    std::function<void ()> on_current_device_change;
+
     bool is_known(const std::string & id) const
     {
         return _devices.contains(id);
@@ -19,6 +21,10 @@ public:
     {
         // why does this requrie move?
         _devices.emplace(d->id(), std::move(d));
+        if (on_current_device_change)
+        {
+            on_current_device_change();
+        }
     }
 
     void apply_to_current(std::function<void (device &)> f)

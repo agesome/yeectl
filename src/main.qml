@@ -37,13 +37,15 @@ Window {
             height: slider.height
 
             Switch {
+                checked: DeviceManager.power
+                onCheckedChanged: DeviceManager.power = checked
             }
 
             ToolSeparator {}
 
             Label {
                 Layout.maximumHeight: parent.height
-                Layout.maximumWidth: 0.3 * slider.width//textMetrics.width
+                Layout.maximumWidth: 0.3 * slider.width
                 fontSizeMode: Text.Fit
                 font.pointSize: 100
                 horizontalAlignment: Text.AlignRight

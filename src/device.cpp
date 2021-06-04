@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 #include <charconv>
+#include <set>
 
 device::device(asio::io_context &context, property_map properties)
     : _socket(context)
@@ -41,10 +42,10 @@ void device::set_property(const std::string &name, const property &value)
         json["params"] = { std::get<int>(value) };
     }
 
-    const auto result = _requests.emplace(_request_counter++, std::string({ json.dump() + "\r\n" }));
+    auto json_str = json.dump();
+    spdlog::info("set {} -> {}", name, json_str);
+    const auto result = _requests.emplace(_request_counter++, std::string({ std::move(json_str) + "\r\n" }));
     const auto & str = result.first->second;
-
-    spdlog::info("set {} -> {}", name, str);
 
     _socket.async_send(asio::buffer(str), [=](std::error_code error, std::size_t length)
     {
@@ -79,8 +80,9 @@ device::property_map device::parse_multicast(std::string_view view)
 
         int intvalue{};
         property prop;
+        static const std::set<std::string_view> force_string_type{ "id", "power" };
         if (auto [_, error] = std::from_chars(value.data(), &value.data()[value.size()], intvalue);
-                error == std::errc::invalid_argument || key == "id")
+                error == std::errc::invalid_argument || force_string_type.contains(key))
         {
             prop = std::string(value);
         }
@@ -184,6 +186,13 @@ void device::connect()
     auto endpoint = find_endpoint(std::get<std::string>(_properties["Location"]));
     _socket.connect(endpoint);
     spdlog::info("device at {} connected", endpoint.address().to_string());
+    if (on_property_change)
+    {
+        for (const auto & p : _properties)
+        {
+            on_property_change(id(), p.first);
+        }
+    }
 }
 
 bool device::try_reconnect(std::error_code error)
