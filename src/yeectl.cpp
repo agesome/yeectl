@@ -13,6 +13,11 @@
 
 int main(int argc, char **argv)
 {
+    spdlog::set_pattern("[%c] [%t] [%l] %v");
+#if 0
+    spdlog::set_level(spdlog::level::debug);
+#endif
+
     asio::io_context io_context;
 
     device_manager manager;
@@ -31,6 +36,7 @@ int main(int argc, char **argv)
 
     std::thread io_thread([&]()
     {
+        spdlog::debug("io thread starting");
         try
         {
             io_context.run();

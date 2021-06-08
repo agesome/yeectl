@@ -49,6 +49,8 @@ void multicast_worker::do_receive(asio::io_context &context)
             return;
         }
 
+        spdlog::debug("multicast received: {}", length);
+
         const std::string_view view(_buffer.data(), length);
         const auto properties = device::parse_multicast(view);
         if (properties.contains("Location") && !_device_manager.is_known(std::get<std::string>(properties.at("id"))))

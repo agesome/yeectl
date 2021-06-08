@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <asio.hpp>
 #include <variant>
+#include <nlohmann/json.hpp>
 
 class device
 {
@@ -23,11 +24,16 @@ public:
 
 private:
     static constexpr auto kBufferSize = 1024U;
+    static constexpr auto kReconnectTimeout = std::chrono::seconds(5);
 
     static asio::ip::tcp::endpoint find_endpoint(const std::string &view);
     void listen();
     void connect();
     bool try_reconnect(std::error_code error);
+
+    void process_message(std::string_view view);
+    void process_request_result(const nlohmann::json & json);
+    void process_property_updates(const nlohmann::json & json);
 
     asio::ip::tcp::socket   _socket;
     property_map            _properties;
@@ -35,6 +41,7 @@ private:
 
     std::array<char, kBufferSize>           _buffer;
     std::unordered_map<size_t, std::string> _requests;
+    asio::steady_timer                      _timer;
 };
 
 #endif // YEECTL_DEVICE_HPP

@@ -2,7 +2,6 @@
 #include <util.hpp>
 
 #include <spdlog/spdlog.h>
-#include <nlohmann/json.hpp>
 #include <charconv>
 #include <set>
 
@@ -10,6 +9,7 @@ device::device(asio::io_context &context, property_map properties)
     : _socket(context)
     , _properties(std::move(properties))
     , _request_counter(0)
+    , _timer(context)
 {
     connect();
     listen();
@@ -59,6 +59,10 @@ void device::set_property(const std::string &name, const property &value)
         {
             spdlog::warn("set_property: sent {} vs {}", length, str.length());
             _requests.erase(result.first);
+        }
+        else
+        {
+            spdlog::debug("request {} sent", result.first->first);
         }
     });
 }
@@ -134,65 +138,119 @@ void device::listen()
             return;
         }
 
+        spdlog::debug("message from lamp received: {}", length);
+
         std::string_view view(_buffer.data(), length);
-        nlohmann::json json;
-        try
+
+        for (const auto & line : util::split_lines(view))
         {
-            json = nlohmann::json::parse(view);
-        }
-        catch (const std::exception & ex)
-        {
-            spdlog::warn("json::parse failed: {}", ex.what());
-            spdlog::warn("message was: {}", view);
-            listen();
+            process_message(line);
         }
 
-        if (json.contains("id"))
-        {
-            const auto id = json.at("id").get<size_t>();
-            _requests.erase(id);
-            spdlog::info("request {} completed: {}", id, json["result"].front());
-        }
-        else if (json["method"] == "props")
-        {
-           for (auto & el : json["params"].items())
-           {
-               property update;
-               if (el.value().is_number())
-               {
-                   update = el.value().get<int>();
-               }
-               else
-               {
-                   update = el.value().get<std::string>();
-               }
-
-               spdlog::info("property update: {} = {}", el.key(), el.value().dump());
-               const auto v = _properties.insert_or_assign(el.key(), update);
-
-               if (on_property_change)
-               {
-                   on_property_change(id(), v.first->first);
-               }
-           }
-        }
+        spdlog::info("request buffer size: {}", _requests.size());
 
         listen();
     });
 }
 
-void device::connect()
+void device::process_message(std::string_view view)
 {
-    auto endpoint = find_endpoint(std::get<std::string>(_properties["Location"]));
-    _socket.connect(endpoint);
-    spdlog::info("device at {} connected", endpoint.address().to_string());
-    if (on_property_change)
+    nlohmann::json json;
+    try
     {
-        for (const auto & p : _properties)
+        json = nlohmann::json::parse(view);
+    }
+    catch (const std::exception & ex)
+    {
+        spdlog::warn("json::parse failed: {}", ex.what());
+        spdlog::warn("message was: {}", view);
+        listen();
+    }
+
+    if (json.contains("id"))
+    {
+        process_request_result(json);
+    }
+    else if (json["method"] == "props")
+    {
+        process_property_updates(json);
+    }
+}
+
+void device::process_request_result(const nlohmann::json &json)
+{
+    const auto id = json.at("id").get<size_t>();
+    _requests.erase(id);
+    if (json.contains("result"))
+    {
+        spdlog::info("request {} completed: {}", id, json["result"].front());
+    }
+    else if (json.contains("error"))
+    {
+        spdlog::warn("request {} failed: {}", id, json["error"]["message"].front());
+    }
+    else
+    {
+        spdlog::warn("unexpected json: {}", json.dump());
+    }
+}
+
+void device::process_property_updates(const nlohmann::json &json)
+{
+    for (auto & el : json["params"].items())
+    {
+        property update;
+        if (el.value().is_number())
         {
-            on_property_change(id(), p.first);
+            update = el.value().get<int>();
+        }
+        else
+        {
+            update = el.value().get<std::string>();
+        }
+
+        spdlog::info("property update: {} = {}", el.key(), el.value().dump());
+        const auto v = _properties.insert_or_assign(el.key(), update);
+
+        if (on_property_change)
+        {
+            on_property_change(id(), v.first->first);
         }
     }
+}
+
+void device::connect()
+{
+    const auto endpoint = find_endpoint(std::get<std::string>(_properties["Location"]));
+
+    _socket.async_connect(endpoint, [endpoint, this](std::error_code error)
+    {
+        if (!error)
+        {
+            spdlog::info("device at {} connected", endpoint.address().to_string());
+            if (on_property_change)
+            {
+                for (const auto & p : _properties)
+                {
+                    on_property_change(id(), p.first);
+                }
+            }
+        }
+        else
+        {
+            spdlog::warn("failed to connect: {}", error.message());
+            _timer.expires_after(kReconnectTimeout);
+            _timer.async_wait([this](std::error_code error)
+            {
+                if (error)
+                {
+                    spdlog::error("timer wait failed: {}", error.message());
+                    return;
+                }
+                connect();
+            });
+        }
+    });
 }
 
 bool device::try_reconnect(std::error_code error)
