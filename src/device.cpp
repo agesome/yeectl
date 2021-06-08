@@ -7,9 +7,8 @@
 
 device::device(asio::io_context &context, property_map properties)
     : _socket(context)
-    , _properties(std::move(properties))
-    , _request_counter(0)
     , _timer(context)
+    , _properties(std::move(properties))
 {
     connect();
     listen();
@@ -29,7 +28,7 @@ void device::set_property(const std::string &name, const property &value)
 {
     auto json = nlohmann::json
     {
-        { "id", _request_counter },
+        { "id", 0 },
         { "method", fmt::format("set_{}", name) },
     };
 
@@ -42,12 +41,13 @@ void device::set_property(const std::string &name, const property &value)
         json["params"] = { std::get<int>(value) };
     }
 
-    auto json_str = json.dump();
-    spdlog::info("set {} -> {}", name, json_str);
-    const auto result = _requests.emplace(_request_counter++, std::string({ std::move(json_str) + "\r\n" }));
-    const auto & str = result.first->second;
+    auto str = std::make_unique<std::string>(json.dump());
+    spdlog::info("set {} -> {}", name, *str);
+    str->append("\r\n");
 
-    _socket.async_send(asio::buffer(str), [=](std::error_code error, std::size_t length)
+    // why do we crash if buffer is constructed directly?
+    const auto buf = asio::buffer(*str);
+    _socket.async_send(buf, [s = std::move(str), this](std::error_code error, std::size_t length)
     {
         if (error && !try_reconnect(error))
         {
@@ -55,14 +55,9 @@ void device::set_property(const std::string &name, const property &value)
             return;
         }
 
-        if (length != str.length())
+        if (length != s->length())
         {
-            spdlog::warn("set_property: sent {} vs {}", length, str.length());
-            _requests.erase(result.first);
-        }
-        else
-        {
-            spdlog::debug("request {} sent", result.first->first);
+            spdlog::warn("set_property: sent {} vs {}", length, s->length());
         }
     });
 }
@@ -141,62 +136,47 @@ void device::listen()
         spdlog::debug("message from lamp received: {}", length);
 
         std::string_view view(_buffer.data(), length);
-
-        for (const auto & line : util::split_lines(view))
-        {
-            process_message(line);
-        }
-
-        spdlog::info("request buffer size: {}", _requests.size());
-
+        process_messages(util::split_lines(view));
         listen();
     });
 }
 
-void device::process_message(std::string_view view)
+void device::process_messages(std::vector<std::string_view> lines)
 {
     nlohmann::json json;
-    try
+    property_map updates;
+
+    for (const auto line : lines)
     {
-        json = nlohmann::json::parse(view);
-    }
-    catch (const std::exception & ex)
-    {
-        spdlog::warn("json::parse failed: {}", ex.what());
-        spdlog::warn("message was: {}", view);
-        listen();
+        try
+        {
+            json = nlohmann::json::parse(line);
+        }
+        catch (const std::exception & ex)
+        {
+            spdlog::warn("json::parse failed: {}", ex.what());
+            spdlog::warn("message was: {}", line);
+            continue;
+        }
+
+        if (json.contains("error"))
+        {
+            spdlog::warn("request failed: {}", json["error"]["message"].front());
+        }
+        else if (json["method"] == "props")
+        {
+            util::update_map(updates, extract_property_updates(json));
+        }
     }
 
-    if (json.contains("id"))
-    {
-        process_request_result(json);
-    }
-    else if (json["method"] == "props")
-    {
-        process_property_updates(json);
-    }
+    util::update_map(_properties, updates);
+    notify_property_updates(updates);
 }
 
-void device::process_request_result(const nlohmann::json &json)
-{
-    const auto id = json.at("id").get<size_t>();
-    _requests.erase(id);
-    if (json.contains("result"))
-    {
-        spdlog::info("request {} completed: {}", id, json["result"].front());
-    }
-    else if (json.contains("error"))
-    {
-        spdlog::warn("request {} failed: {}", id, json["error"]["message"].front());
-    }
-    else
-    {
-        spdlog::warn("unexpected json: {}", json.dump());
-    }
-}
 
-void device::process_property_updates(const nlohmann::json &json)
+device::property_map device::extract_property_updates(const nlohmann::json &json)
 {
+    property_map updates;
     for (auto & el : json["params"].items())
     {
         property update;
@@ -209,13 +189,23 @@ void device::process_property_updates(const nlohmann::json &json)
             update = el.value().get<std::string>();
         }
 
-        spdlog::info("property update: {} = {}", el.key(), el.value().dump());
-        const auto v = _properties.insert_or_assign(el.key(), update);
+        updates.insert_or_assign(el.key(), update);
+    }
 
-        if (on_property_change)
-        {
-            on_property_change(id(), v.first->first);
-        }
+    return updates;
+}
+
+void device::notify_property_updates(const property_map &updates)
+{
+    if (!on_property_change)
+    {
+        return;
+    }
+
+    for (const auto & p : updates)
+    {
+        spdlog::info("property update: {} = {}", p.first, util::variant_to_string(p.second));
+        on_property_change(id(), p.first);
     }
 }
 
@@ -228,13 +218,7 @@ void device::connect()
         if (!error)
         {
             spdlog::info("device at {} connected", endpoint.address().to_string());
-            if (on_property_change)
-            {
-                for (const auto & p : _properties)
-                {
-                    on_property_change(id(), p.first);
-                }
-            }
+            notify_property_updates(_properties);
         }
         else
         {
@@ -260,8 +244,6 @@ bool device::try_reconnect(std::error_code error)
     {
         spdlog::info("try to reconnect: {}", error.message());
         _socket.close();
-        _request_counter = 0;
-        _requests.clear();
         connect();
         listen();
     }

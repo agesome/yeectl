@@ -31,17 +31,17 @@ private:
     void connect();
     bool try_reconnect(std::error_code error);
 
-    void process_message(std::string_view view);
-    void process_request_result(const nlohmann::json & json);
-    void process_property_updates(const nlohmann::json & json);
+    void process_messages(std::vector<std::string_view> lines);
+    property_map extract_property_updates(const nlohmann::json & json);
+
+    void notify_property_updates(const property_map & updates);
 
     asio::ip::tcp::socket   _socket;
+    asio::steady_timer      _timer;
     property_map            _properties;
-    size_t                  _request_counter;
 
-    std::array<char, kBufferSize>           _buffer;
-    std::unordered_map<size_t, std::string> _requests;
-    asio::steady_timer                      _timer;
+    std::array<char, kBufferSize> _buffer;
+
 };
 
 #endif // YEECTL_DEVICE_HPP

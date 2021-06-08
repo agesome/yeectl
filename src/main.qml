@@ -60,6 +60,7 @@ Window {
                 stepSize: 5
                 snapMode: Slider.SnapAlways
                 wheelEnabled: true
+                live: false
                 onValueChanged: DeviceManager.brightness = value
             }
         }

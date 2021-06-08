@@ -2,6 +2,7 @@
 #include <vector>
 #include <utility>
 #include <optional>
+#include <variant>
 
 namespace util
 {
@@ -38,6 +39,29 @@ static auto split_key_and_value(std::string_view line) -> std::optional<std::tup
         return {};
     }
     return std::make_tuple(key, value);
+}
+
+template<typename M>
+static void update_map(M & target, const M & source)
+{
+    for (const auto & e : source)
+    {
+        target.insert_or_assign(e.first, e.second);
+    }
+}
+
+static std::string variant_to_string(const auto & v)
+{
+    return std::visit([](auto&& arg)
+    {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, std::string>)
+            return arg;
+        else if constexpr (std::is_arithmetic_v<T>)
+            return std::to_string(arg);
+        else
+            static_assert(always_false_v<T>, "non-exhaustive visitor!");
+    }, v);
 }
 
 }
