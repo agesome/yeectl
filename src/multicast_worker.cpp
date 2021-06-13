@@ -24,7 +24,7 @@ multicast_worker::multicast_worker(asio::io_context &context, device_manager &ma
         {
             if (error)
             {
-                throw std::exception(fmt::format("failed to resolve local hostname: {}", error.message()).c_str());
+                throw std::runtime_error(fmt::format("failed to resolve local hostname: {}", error.message()));
             }
 
             spdlog::info("resolved local ip: {} -> {}", asio::ip::host_name(), result->endpoint().address().to_string());

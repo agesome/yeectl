@@ -101,7 +101,7 @@ asio::ip::tcp::endpoint device::find_endpoint(const std::string & view)
     auto line_start = view.find("yeelight://");
     if (line_start == std::string::npos)
     {
-        throw std::exception("no yeelight:// in data");
+        throw std::runtime_error("no yeelight:// in data");
     }
 
     auto line_end = view.find_first_of('\n', line_start);
@@ -117,7 +117,7 @@ asio::ip::tcp::endpoint device::find_endpoint(const std::string & view)
     if (auto [_, error] = std::from_chars(port_str.data(), &port_str.data()[port_str.size()], port);
             error == std::errc::invalid_argument)
     {
-        throw std::exception("from_chars failed");
+        throw std::runtime_error("from_chars failed");
     }
 
     return { asio::ip::make_address_v4(ip_str), port };
