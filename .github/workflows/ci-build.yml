@@ -1,0 +1,71 @@
+name: "CI Build"
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - README.md
+      - .gitignore
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  Windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: windows
+            os_version: latest
+            qt_version: 6.2.0
+            arch: x64
+            ssl_arch: -x64
+            cmake_opts:
+
+    runs-on: ${{ matrix.config.os }}-${{ matrix.config.os_version }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # - uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v1
+        with:
+          path: ../Qt
+          key: ${{ matrix.config.os }}-${{ matrix.config.arch }}-${{ matrix.config.qt_version }}-QtCache
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v2
+        with:
+          version: ${{ matrix.config.qt_version }}
+          arch: ${{ matrix.config.qt_arch }}
+          cached: ${{ steps.cache-qt.outputs.cache-hit }}
+
+      - name: Install Conan
+        id: conan
+        uses: turtlebrowser/get-conan@main
+
+      - name: Prepare dev cmd
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.config.arch }}
+
+      - name: Install Conan packages
+        run: |
+          mkdir ${{github.workspace}}/build
+          conan install ${{github.workspace}}/conanfile.txt -s build_type=Release -if ${{github.workspace}}/build
+
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+      # - uses: actions/upload-artifact@v2
+      #   with:
+      #     name: packages-${{ matrix.config.os }}-${{ matrix.config.arch }}
+      #     path: '${{ env.KLOGG_BUILD_ROOT }}/packages/*'
+      #     if-no-files-found: error
