@@ -46,7 +46,11 @@ set(HEADERS_TO_PRECOMPILE
 qt_add_resources(RESOURCES resources.qrc)
 qt_wrap_cpp(MOC_FILES ${QT_HEADER_FILES})
 
-add_executable(yeectl $<$<CONFIG:Release>:WIN32> ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
+if (CMAKE_BUILD_TYPE STREQUAL "Release" AND WIN32)
+    add_executable(yeectl WIN32 ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
+else()
+    add_executable(yeectl ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
+endif()
 target_include_directories(yeectl PRIVATE src)
 target_link_libraries(yeectl Qt::Qml Qt::Gui Qt::QuickControls2)
 target_link_libraries(yeectl ws2_32 CONAN_PKG::asio CONAN_PKG::spdlog CONAN_PKG::nlohmann_json)
