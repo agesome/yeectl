@@ -48,6 +48,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.config.arch }}
+          toolset: 16.XX
 
       - name: Install Conan packages
         run: |
@@ -64,8 +65,15 @@ jobs:
 
       - name: Package Qt/QML
         run: |
-          windeployqt.exe --qmldir ${{github.workspace}}\ --no-translations --no-compiler-runtime ${{github.workspace}}\build\bin\yeectl.exe
-          7z a ${{github.workspace}}\build\yeectl.7z ${{github.workspace}}\build\bin\*
+          mkdir ${{github.workspace}}\build\yeectl
+          cp ${{github.workspace}}\build\bin\yeectl.exe ${{github.workspace}}\build\yeectl\
+
+      - run: >
+          windeployqt.exe --qmldir ${{github.workspace}}\ --no-translations --no-compiler-runtime
+          --no-system-d3d-compiler --no-virtualkeyboard --no-opengl-sw ${{github.workspace}}\build\yeectl\yeectl.exe
+
+      - run: |
+          7z a ${{github.workspace}}\build\yeectl.7z ${{github.workspace}}\build\yeectl\
           ls ${{github.workspace}}\build\
 
       - name: Upload release
