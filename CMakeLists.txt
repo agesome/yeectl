@@ -51,13 +51,21 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release" AND WIN32)
 else()
     add_executable(yeectl ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
 endif()
+
+qt_add_qml_module(yeectl
+    PLUGIN_TARGET yeectl
+    URI yeectl
+    VERSION 1.0
+    QML_FILES src/main.qml
+)
+
 target_include_directories(yeectl PRIVATE src)
-target_link_libraries(yeectl Qt::Qml Qt::Gui Qt::QuickControls2)
-target_link_libraries(yeectl ws2_32 CONAN_PKG::asio CONAN_PKG::spdlog CONAN_PKG::nlohmann_json)
+target_link_libraries(yeectl PRIVATE Qt::Qml Qt::Gui Qt::QuickControls2)
+target_link_libraries(yeectl PRIVATE ws2_32 CONAN_PKG::asio CONAN_PKG::spdlog CONAN_PKG::nlohmann_json)
 target_precompile_headers(yeectl PRIVATE ${HEADERS_TO_PRECOMPILE})
 
 if (MSVC)
-    target_link_libraries(yeectl ws2_32)
+    target_link_libraries(yeectl PRIVATE ws2_32)
     target_compile_options(yeectl PRIVATE /W4 /MP)
     target_link_options(yeectl PRIVATE /debug:fastlink)
     target_compile_definitions(yeectl PRIVATE _WIN32_WINNT=_WIN32_WINNT_WIN7 _WINSOCK_DEPRECATED_NO_WARNINGS)

@@ -9,7 +9,8 @@
 #include <device_manager.hpp>
 #include <device_manager_wrapper.hpp>
 
-#include "spdlog/spdlog.h"
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 int main(int argc, char **argv)
 {
@@ -17,6 +18,10 @@ int main(int argc, char **argv)
 #if 0
     spdlog::set_level(spdlog::level::debug);
 #endif
+
+    spdlog::default_logger()->sinks().emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>("yeectl.log"));
+    // we don't log that much
+    spdlog::default_logger()->flush_on(spdlog::level::debug);
 
     asio::io_context io_context;
 
@@ -32,7 +37,7 @@ int main(int argc, char **argv)
 
     QQuickStyle::setStyle("Material");
     QGuiApplication app(argc, argv);
-    QQmlApplicationEngine engine("qrc:/src/main.qml");
+    QQmlApplicationEngine engine("qrc:yeectl/src/main.qml");
 
     std::thread io_thread([&]()
     {
