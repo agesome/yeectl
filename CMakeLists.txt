@@ -57,6 +57,7 @@ qt_add_qml_module(yeectl
     URI yeectl
     VERSION 1.0
     QML_FILES src/main.qml
+    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml_module
 )
 
 qt_add_resources(yeectl resources
