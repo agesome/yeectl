@@ -5,11 +5,6 @@ project(yeectl CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
-
-find_package(Qt6 COMPONENTS Gui Qml QuickControls2 REQUIRED)
-
 set(SOURCE_FILES
     src/yeectl.cpp
     src/multicast_worker.cpp
@@ -28,6 +23,10 @@ set(QT_HEADER_FILES
     src/device_manager_wrapper.hpp
 )
 
+set(RESOURCES
+    icons/lamp.svg
+)
+
 set(HEADERS_TO_PRECOMPILE
     src/util.hpp
 
@@ -43,20 +42,26 @@ set(HEADERS_TO_PRECOMPILE
     <optional>
 )
 
-qt_add_resources(RESOURCES resources.qrc)
-qt_wrap_cpp(MOC_FILES ${QT_HEADER_FILES})
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup(TARGETS)
+
+find_package(Qt6 COMPONENTS Gui Qml QuickControls2 REQUIRED)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" AND WIN32)
-    add_executable(yeectl WIN32 ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
+    add_executable(yeectl WIN32 ${SOURCE_FILES} ${RESOURCES} ${HEADER_FILES} ${QT_HEADER_FILES})
 else()
-    add_executable(yeectl ${SOURCE_FILES} ${RESOURCES} ${MOC_FILES} ${HEADER_FILES} ${QT_HEADER_FILES})
+    add_executable(yeectl ${SOURCE_FILES} ${RESOURCES}  ${HEADER_FILES} ${QT_HEADER_FILES})
 endif()
 
 qt_add_qml_module(yeectl
-    PLUGIN_TARGET yeectl
     URI yeectl
     VERSION 1.0
     QML_FILES src/main.qml
+)
+
+qt_add_resources(yeectl resources
+    FILES ${RESOURCES}
+    PREFIX /
 )
 
 target_include_directories(yeectl PRIVATE src)
