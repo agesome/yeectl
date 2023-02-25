@@ -14,13 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - uses: jurplel/install-qt-action@v3
         with:
           version: 6.4.2
           cache: true
 
       - uses: turtlebrowser/get-conan@main
+        with:
+          version: 1.58.0
       - uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install Conan packages
