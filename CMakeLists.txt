@@ -73,6 +73,7 @@ target_precompile_headers(yeectl PRIVATE ${HEADERS_TO_PRECOMPILE})
 if (MSVC)
     target_compile_options(yeectl PRIVATE /W4 /MP)
     target_link_options(yeectl PRIVATE /debug:fastlink)
+    target_compile_definitions(yeectl PRIVATE _WIN32_WINNT=_WIN32_WINNT_WIN10)
 endif()
 
 
