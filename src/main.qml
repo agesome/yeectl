@@ -14,16 +14,6 @@ Window {
 
     y: Screen.desktopAvailableHeight - height
     x: Screen.desktopAvailableWidth - width
-//    y: tray.geometry.y // - tray.geometry.height - height
-//    x: tray.geometry.x //- tray.geometry.width - width
-
-//    onXChanged: {
-//        console.log('pos: ', x, y)
-//    }
-
-//    Component.onCompleted: {
-//        console.log(x, y)
-//    }
 
     onActiveChanged: window.visible = active
 
@@ -72,26 +62,16 @@ Window {
         icon.source: "qrc:/icons/lamp.svg"
 
         menu: Menu {
-            //            MenuItem {
-            //                text: qsTr("Toggle")
-            //                onTriggered: deviceList.currentDevice.toggle()
-            //            }
             MenuItem {
                 text: qsTr("Quit")
                 onTriggered: Qt.quit()
             }
         }
 
-        onActivated: (reason) => {
+        onActivated: reason => {
                          if (reason === SystemTrayIcon.Trigger) {
-//                             window.y = tray.geometry.y - window.height - tray.geometry.height - 150
-//                             window.x = tray.geometry.x - window.width - tray.geometry.width - 150
-//                             console.log(tray.geometry)
-//                             console.log(window.x, window.y)
                              window.show()
                          }
                      }
     }
-
 }
-

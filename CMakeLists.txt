@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.19)
-
 project(yeectl CXX)
-
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_AUTOMOC ON)
+
+include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
+
+find_package(Qt6 COMPONENTS Core Gui QuickControls2 REQUIRED)
+qt_standard_project_setup()
+
+find_package(asio REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 set(SOURCE_FILES
     src/yeectl.cpp
@@ -42,22 +48,16 @@ set(HEADERS_TO_PRECOMPILE
     <optional>
 )
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
-
-find_package(Qt6 COMPONENTS Gui Qml QuickControls2 REQUIRED)
+qt_add_executable(yeectl ${SOURCE_FILES} ${RESOURCES}  ${HEADER_FILES} ${QT_HEADER_FILES})
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" AND WIN32)
-    add_executable(yeectl WIN32 ${SOURCE_FILES} ${RESOURCES} ${HEADER_FILES} ${QT_HEADER_FILES})
-else()
-    add_executable(yeectl ${SOURCE_FILES} ${RESOURCES}  ${HEADER_FILES} ${QT_HEADER_FILES})
+    set_target_properties(yeectl PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 qt_add_qml_module(yeectl
     URI yeectl
     VERSION 1.0
     QML_FILES src/main.qml
-    OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml_module
 )
 
 qt_add_resources(yeectl resources
@@ -67,12 +67,26 @@ qt_add_resources(yeectl resources
 
 target_include_directories(yeectl PRIVATE src)
 target_link_libraries(yeectl PRIVATE Qt::Qml Qt::Gui Qt::QuickControls2)
-target_link_libraries(yeectl PRIVATE ws2_32 CONAN_PKG::asio CONAN_PKG::spdlog CONAN_PKG::nlohmann_json)
+target_link_libraries(yeectl PRIVATE asio::asio spdlog::spdlog nlohmann_json::nlohmann_json)
 target_precompile_headers(yeectl PRIVATE ${HEADERS_TO_PRECOMPILE})
 
 if (MSVC)
-    target_link_libraries(yeectl PRIVATE ws2_32)
     target_compile_options(yeectl PRIVATE /W4 /MP)
     target_link_options(yeectl PRIVATE /debug:fastlink)
-    target_compile_definitions(yeectl PRIVATE _WIN32_WINNT=_WIN32_WINNT_WIN7 _WINSOCK_DEPRECATED_NO_WARNINGS)
 endif()
+
+
+install(TARGETS yeectl
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+qt_generate_deploy_qml_app_script(
+    TARGET yeectl
+    FILENAME_VARIABLE deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+    DEPLOY_USER_QML_MODULES_ON_UNSUPPORTED_PLATFORM
+)
+install(SCRIPT ${deploy_script})
+
+qt_finalize_project()
