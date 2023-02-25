@@ -38,7 +38,7 @@ jobs:
           ls ${{github.workspace}}\build
 
       - name: Install
-        run: cmake --build ${{github.workspace}}\build
+        run: cmake --install ${{github.workspace}}\build
 
       - run: |
           7z a ${{github.workspace}}\yeectl.7z ${{github.workspace}}\yeectl\
