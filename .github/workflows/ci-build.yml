@@ -7,47 +7,21 @@ on:
       - README.md
       - .gitignore
 
-env:
-  BUILD_TYPE: Release
-
 jobs:
   Windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - os: windows
-            os_version: latest
-            qt_version: 6.2.0
-            arch: x64
-
-    runs-on: ${{ matrix.config.os }}-${{ matrix.config.os_version }}
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Cache Qt
-        id: cache-qt
-        uses: actions/cache@v1
-        with:
-          path: ../Qt
-          key: ${{ matrix.config.os }}-${{ matrix.config.arch }}-${{ matrix.config.qt_version }}-QtCache
+      - uses: actions/checkout@v3
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v2
+        uses: jurplel/install-qt-action@v3
         with:
-          version: ${{ matrix.config.qt_version }}
-          arch: ${{ matrix.config.qt_arch }}
-          cached: ${{ steps.cache-qt.outputs.cache-hit }}
+          version: 6.4.2
+          cache: true
 
-      - name: Install Conan
-        id: conan
-        uses: turtlebrowser/get-conan@main
-
-      - name: Prepare dev cmd
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: ${{ matrix.config.arch }}
+      - uses: turtlebrowser/get-conan@main
+      - uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install Conan packages
         run: |
@@ -55,25 +29,19 @@ jobs:
           conan install ${{github.workspace}}\conanfile.txt -s build_type=Release -if ${{github.workspace}}\build
 
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}\build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -GNinja
+        run: cmake -B ${{github.workspace}}\build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{github.workspace}}\yeectl -GNinja
 
       - name: Build
         run: |
-          cmake --build ${{github.workspace}}\build --config ${{env.BUILD_TYPE}}
+          cmake --build ${{github.workspace}}\build
           ls ${{github.workspace}}\build
 
-      - name: Package Qt/QML
-        run: |
-          mkdir ${{github.workspace}}\build\yeectl
-          cp ${{github.workspace}}\build\bin\yeectl.exe ${{github.workspace}}\build\yeectl\
-
-      - run: >
-          windeployqt.exe --qmldir ${{github.workspace}}\ --no-translations --no-compiler-runtime
-          --no-system-d3d-compiler --no-virtualkeyboard --no-opengl-sw ${{github.workspace}}\build\yeectl\yeectl.exe
+      - name: Install
+        run: cmake --build ${{github.workspace}}\build
 
       - run: |
-          7z a ${{github.workspace}}\build\yeectl.7z ${{github.workspace}}\build\yeectl\
-          ls ${{github.workspace}}\build\
+          7z a ${{github.workspace}}\yeectl.7z ${{github.workspace}}\yeectl\
+          ls ${{github.workspace}}\
 
       - name: Upload release
         uses: marvinpinto/action-automatic-releases@latest
@@ -81,5 +49,4 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN  }}
           automatic_release_tag: continuous-win
           prerelease: true
-          files: build/yeectl.7z
-
+          files: yeectl.7z
